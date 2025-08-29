@@ -181,7 +181,7 @@ class Mines
                     continue;
                 }
 
-                if (!Minefield[i, j].isOpened && !Minefield[i, j].isMine)
+                if (!Minefield[i, j].isOpened && !Minefield[i, j].isFlagged && !Minefield[i, j].isMine)
                 {
                     Minefield[i, j].isOpened = true;
                     RevealEmptyNeighborTiles(i, j);
