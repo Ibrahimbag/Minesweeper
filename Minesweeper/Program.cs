@@ -263,7 +263,7 @@ class Program
         NCurses.InitPair(18, CursesColor.YELLOW, CursesColor.YELLOW);
         NCurses.InitPair(19, CursesColor.RED, CursesColor.RED);
 
-        int minefieldScreenHeight = 20, minefieldScreenWidth = 60, totalMines = 200;
+        int minefieldScreenHeight = 20, minefieldScreenWidth = 60, totalMines = 120;
         int[] exclude = { 0, 0 };
 
         nint minefieldScreen = NCurses.NewWindow(
