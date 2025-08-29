@@ -156,7 +156,15 @@ class Mines
 
             RevealEmptyNeighborTiles(y, x);
             
-        } 
+        }
+
+        // BUG: When user presses f on the target tile, chording does not work even though flag
+        // sign doesn't show up, but when user pressed the f key again, chording starts working again
+        else if (key == ' ' && Minefield[y, x].isOpened && !Minefield[y, x].isFlagged)
+        {
+            return HandleChord(y, x);
+        }
+
         else if (key == 'f' || key == 'F' && !Minefield[y, x].isOpened)
         {
             Minefield[y, x].isFlagged = !Minefield[y, x].isFlagged;
@@ -188,6 +196,59 @@ class Mines
                 }
             }
         }
+    }
+
+    private bool HandleChord(int y, int x)
+    {
+        int neighborTilesFlagCount = 0;
+
+        for (int i = y - 1; i < y + 2; i++)
+        {
+            for (int j = x - 1; j < x + 2; j++)
+            {
+                if (i < 0 || j < 0 || i >= ScreenHeight || j >= ScreenWidth)
+                {
+                    continue;
+                }
+                else if (i == 0 && j == 0)
+                {
+                    continue;
+                }
+                else if (Minefield[i, j].isFlagged)
+                {
+                    neighborTilesFlagCount++;
+                }
+            }
+        }
+
+        if (Minefield[y, x].borderingMineCount != neighborTilesFlagCount)
+        {
+            return false;
+        }
+
+        for (int i = y - 1; i < y + 2; i++)
+        {
+            for (int j = x - 1; j < x + 2; j++)
+            {
+                if (i < 0 || j < 0 || i >= ScreenHeight || j >= ScreenWidth)
+                {
+                    continue;
+                }
+
+                if (!Minefield[i, j].isFlagged)
+                {
+                    Minefield[i, j].isOpened = true;
+                    RevealEmptyNeighborTiles(i, j);
+                }
+
+                if (!Minefield[i, j].isFlagged && Minefield[i, j].isOpened && Minefield[i, j].isMine)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
 
@@ -263,7 +324,7 @@ class Program
         NCurses.InitPair(18, CursesColor.YELLOW, CursesColor.YELLOW);
         NCurses.InitPair(19, CursesColor.RED, CursesColor.RED);
 
-        int minefieldScreenHeight = 20, minefieldScreenWidth = 60, totalMines = 120;
+        int minefieldScreenHeight = 20, minefieldScreenWidth = 60, totalMines = 150;
         int[] exclude = { 0, 0 };
 
         nint minefieldScreen = NCurses.NewWindow(
