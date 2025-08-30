@@ -158,14 +158,12 @@ class Mines
             
         }
 
-        // BUG: When user presses f on the target tile, chording does not work even though flag
-        // sign doesn't show up, but when user pressed the f key again, chording starts working again
         else if (key == ' ' && Minefield[y, x].isOpened && !Minefield[y, x].isFlagged)
         {
             return HandleChord(y, x);
         }
 
-        else if (key == 'f' || key == 'F' && !Minefield[y, x].isOpened)
+        else if ((key == 'f' || key == 'F') && !Minefield[y, x].isOpened)
         {
             Minefield[y, x].isFlagged = !Minefield[y, x].isFlagged;
         }
