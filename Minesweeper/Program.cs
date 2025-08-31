@@ -5,7 +5,7 @@ using System.Threading;
 
 class Mines
 {
-    struct Minefield_s
+    public struct Minefield_s
     {
         public bool isMine;
         public int borderingMineCount;
@@ -16,7 +16,7 @@ class Mines
     private readonly int ScreenHeight;
     private readonly int ScreenWidth;
     private readonly int TotalMines;
-    private Minefield_s[,] Minefield;
+    public Minefield_s[,] Minefield;
     private List<int[]> mineLocations;
 
     public Mines(int screenHeight, int screenWidth, int totalMines) 
@@ -119,7 +119,7 @@ class Mines
                 {
                     NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(colorPair));
                     colorPair = playerPositionYX.SequenceEqual([i, j]) ? colorPair - 9 : colorPair;
-                    NCurses.MoveWindowAddString(minefieldScreen, i + 1, j + 1, colorPair.ToString().Replace('0', '.'));
+                    NCurses.MoveWindowAddString(minefieldScreen, i + 1, j + 1, colorPair.ToString().Replace('0', ' '));
                     colorPair = playerPositionYX.SequenceEqual([i, j]) ? colorPair + 9 : colorPair;
                     NCurses.WindowAttributeOff(minefieldScreen, NCurses.ColorPair(colorPair));
                 }
@@ -248,6 +248,21 @@ class Mines
 
         return false;
     }
+
+    // TODO
+    public int CountRemainingMines(int totalMines)
+    {
+        int flagCount = 0;
+        foreach (var m in Minefield)
+        {
+            if (m.isFlagged)
+            {
+                flagCount++;
+            }
+        }
+
+        return totalMines - flagCount;
+    }
 }
 
 class Program
@@ -259,6 +274,18 @@ class Program
             return true;
         }
         return false;
+    }
+
+    // TODO
+    static void CalculateRemainingMines(nint topScreen, Mines minefield, int totalMines)
+    {
+        int remainingMineCount = minefield.CountRemainingMines(totalMines);
+
+        NCurses.WindowAttributeOn(topScreen, CursesAttribute.REVERSE);
+        NCurses.ClearWindow(topScreen);
+        NCurses.MoveWindowAddString(topScreen, 0, 0, $"Remaning mines: {remainingMineCount}");
+        NCurses.WindowRefresh(topScreen);
+        NCurses.WindowAttributeOff(topScreen, CursesAttribute.REVERSE);
     }
 
     static int[] UpdatePlayerPosition(int key, int[]playerPositionYX, int minefieldScreenHeight, int minefieldScreenWidth)
@@ -334,6 +361,8 @@ class Program
         NCurses.CBreak();
         NCurses.Keypad(minefieldScreen, true);
 
+        nint topScreen = NCurses.NewWindow(1, screenWidth, 0, 0);
+
         Mines minefield = new(minefieldScreenHeight, minefieldScreenWidth, totalMines);
 
         int key = 0;
@@ -344,8 +373,24 @@ class Program
         {
             NCurses.ClearWindow(minefieldScreen);
             minefield.DisplayMines(minefieldScreen, playerPositionYX, false);
+
+            int colorPair = 0;
+            Mines.Minefield_s focusedMine = minefield.Minefield[playerPositionYX[0], playerPositionYX[1]];
+            if (focusedMine.isOpened)
+            {
+                colorPair = minefield.Minefield[playerPositionYX[0], playerPositionYX[1]].borderingMineCount;
+            }
+            else if (focusedMine.isFlagged)
+            {
+                colorPair = 5;
+            }
+            NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(colorPair));
             NCurses.Box(minefieldScreen, '|', '-');
+            NCurses.WindowAttributeOff(minefieldScreen, NCurses.ColorPair(colorPair));
+
             NCurses.WindowRefresh(minefieldScreen);
+
+            CalculateRemainingMines(topScreen, minefield, totalMines);
 
             key = NCurses.WindowGetChar(minefieldScreen);
 
@@ -366,7 +411,9 @@ class Program
         {
             NCurses.ClearWindow(minefieldScreen);
             minefield.DisplayMines(minefieldScreen, playerPositionYX, true);
+            NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(3));
             NCurses.Box(minefieldScreen, '|', '-');
+            NCurses.WindowAttributeOff(minefieldScreen, NCurses.ColorPair(3));
             NCurses.WindowRefresh(minefieldScreen);
             Thread.Sleep(2000);
             NCurses.WindowGetChar(minefieldScreen);
