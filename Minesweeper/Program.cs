@@ -135,7 +135,7 @@ class Mines
                     }
 
                     NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(colorPair));
-                    NCurses.MoveWindowAddString(minefieldScreen, i + 1, j + 1, "#"); // TODO
+                    NCurses.MoveWindowAddString(minefieldScreen, i + 1, j + 1, "#");
                     NCurses.WindowAttributeOff(minefieldScreen, NCurses.ColorPair(colorPair));
                 }
             }
@@ -249,7 +249,6 @@ class Mines
         return false;
     }
 
-    // TODO
     public int CountRemainingMines(int totalMines)
     {
         int flagCount = 0;
@@ -262,6 +261,18 @@ class Mines
         }
 
         return totalMines - flagCount;
+    }
+
+    public bool HasWon()
+    {
+        foreach (Minefield_s tile in Minefield)
+        {
+            if (!tile.isMine && !tile.isOpened)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
@@ -276,7 +287,6 @@ class Program
         return false;
     }
 
-    // TODO
     static void CalculateRemainingMines(nint topScreen, Mines minefield, int totalMines)
     {
         int remainingMineCount = minefield.CountRemainingMines(totalMines);
@@ -355,8 +365,8 @@ class Program
         nint minefieldScreen = NCurses.NewWindow(
             minefieldScreenHeight + 2, 
             minefieldScreenWidth + 2, 
-            (screenHeight / 2) - (minefieldScreenHeight / 2), 
-            (screenWidth / 2) - (minefieldScreenWidth / 2)
+            (screenHeight / 2) - (minefieldScreenHeight / 2) - 2, 
+            (screenWidth / 2) - (minefieldScreenWidth / 2) - 2
         ); 
         NCurses.CBreak();
         NCurses.Keypad(minefieldScreen, true);
@@ -368,8 +378,9 @@ class Program
         int key = 0;
         int[] playerPositionYX = [0, 0];
         bool wrongTileChoosen = false;
+        bool gameWon = false;
         bool gameStarted = false;
-        while (!ShouldExit(key) && !wrongTileChoosen)
+        while (!ShouldExit(key) && !wrongTileChoosen && !(gameWon = minefield.HasWon()))
         {
             NCurses.ClearWindow(minefieldScreen);
             minefield.DisplayMines(minefieldScreen, playerPositionYX, false);
@@ -407,13 +418,27 @@ class Program
             wrongTileChoosen = minefield.OpenOrFlagTile(key, playerPositionYX);
         }
 
-        if (wrongTileChoosen)
+        if (wrongTileChoosen || gameWon)
         {
             NCurses.ClearWindow(minefieldScreen);
-            minefield.DisplayMines(minefieldScreen, playerPositionYX, true);
-            NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(3));
+            minefield.DisplayMines(minefieldScreen, playerPositionYX, wrongTileChoosen ? true : false);
+
+            int colorPair = 0;
+            string gameResult = string.Empty;
+            colorPair = wrongTileChoosen ? colorPair = 3 : colorPair = 2;
+            gameResult = wrongTileChoosen ? gameResult = "You lose!" : gameResult = "You win!";
+
+            NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(colorPair));
             NCurses.Box(minefieldScreen, '|', '-');
-            NCurses.WindowAttributeOff(minefieldScreen, NCurses.ColorPair(3));
+            NCurses.WindowAttributeOff(minefieldScreen, NCurses.ColorPair(colorPair));
+
+            NCurses.MoveAddString(
+                (screenHeight / 2) - (minefieldScreenHeight / 2) + minefieldScreenHeight + 3, 
+                screenWidth / 2 - gameResult.Length / 2,
+                gameResult
+            );
+            NCurses.Refresh();
+
             NCurses.WindowRefresh(minefieldScreen);
             Thread.Sleep(2000);
             NCurses.WindowGetChar(minefieldScreen);
