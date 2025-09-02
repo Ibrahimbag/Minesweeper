@@ -359,7 +359,7 @@ class Program
         NCurses.InitPair(18, CursesColor.YELLOW, CursesColor.YELLOW);
         NCurses.InitPair(19, CursesColor.RED, CursesColor.RED);
 
-        int minefieldScreenHeight = 20, minefieldScreenWidth = 60, totalMines = 150;
+        int minefieldScreenHeight = 20, minefieldScreenWidth = 60, totalMines = 10;
         int[] exclude = { 0, 0 };
 
         nint minefieldScreen = NCurses.NewWindow(
@@ -427,6 +427,7 @@ class Program
             string gameResult = string.Empty;
             colorPair = wrongTileChoosen ? colorPair = 3 : colorPair = 2;
             gameResult = wrongTileChoosen ? gameResult = "You lose!" : gameResult = "You win!";
+            gameResult += " Press R to restart, Q to quit.";
 
             NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(colorPair));
             NCurses.Box(minefieldScreen, '|', '-');
@@ -440,10 +441,26 @@ class Program
             NCurses.Refresh();
 
             NCurses.WindowRefresh(minefieldScreen);
-            Thread.Sleep(2000);
-            NCurses.WindowGetChar(minefieldScreen);
+
+            int ch;
+            do
+            {
+                ch = NCurses.WindowGetChar(minefieldScreen);
+            }
+            while (ch != 'r' && ch != 'R' && ch != 'q' && ch != 'Q');
+
+            if (ch == 'r' || ch == 'R')
+            {
+                NCurses.Clear();
+                NCurses.Refresh();
+                NCurses.EndWin();
+                Main();
+            }
         }
 
-        NCurses.EndWin();
+        if (!NCurses.IsEndWin())
+        {
+            NCurses.EndWin();
+        }
     }
 }
