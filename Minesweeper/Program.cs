@@ -313,7 +313,7 @@ internal class Program
         return playerPositionYX;
     }
 
-    private static void Main()
+    private static void Main(string[] args)
     {
         nint screen = NCurses.InitScreen();
         NCurses.GetMaxYX(screen, out int screenHeight, out int screenWidth);
@@ -351,7 +351,43 @@ internal class Program
         NCurses.InitPair(18, CursesColor.YELLOW, CursesColor.YELLOW);
         NCurses.InitPair(19, CursesColor.RED, CursesColor.RED);
 
-        int minefieldScreenHeight = 20, minefieldScreenWidth = 60, totalMines = 150;
+        int minefieldScreenHeight, minefieldScreenWidth, totalMines;
+
+        try
+        {
+            minefieldScreenHeight = Math.Abs(int.Parse(args[0]));
+            minefieldScreenWidth = Math.Abs(int.Parse(args[1]));
+            totalMines = Math.Abs(int.Parse(args[2]));
+        }
+        catch (Exception e)
+        {
+            if (e is IndexOutOfRangeException)
+            {
+                NCurses.EndWin();
+                Console.WriteLine($"Usage: dotnet run [height] [width] [mines]");
+                Environment.Exit(1);
+            }
+
+            minefieldScreenHeight = 20;
+            minefieldScreenWidth = 60;
+            totalMines = 150;
+        }
+
+        if (minefieldScreenHeight > screenHeight - 8)
+        {
+            minefieldScreenHeight = screenHeight - 8;
+        }
+        if (minefieldScreenWidth > screenWidth - 3)
+        {
+            minefieldScreenWidth = screenWidth - 3;
+        }
+
+        if (minefieldScreenHeight * minefieldScreenWidth <= totalMines)
+        {
+            totalMines = minefieldScreenHeight * minefieldScreenWidth / 2;
+        }
+
+
         int[] exclude = { 0, 0 };
 
         nint minefieldScreen = NCurses.NewWindow(
@@ -446,7 +482,7 @@ internal class Program
                 NCurses.Clear();
                 NCurses.Refresh();
                 NCurses.EndWin();
-                Main();
+                Main(args);
             }
         }
 
