@@ -287,6 +287,25 @@ internal class Mines
     }
 }
 
+internal class Timer
+{
+    private static long UnixInitialTime;
+    private static long UnixCurrentTime;
+
+    public static void InitTimer()
+    {
+        DateTime currentTime = DateTime.UtcNow;
+        UnixInitialTime = ((DateTimeOffset)currentTime).ToUnixTimeSeconds();
+    }
+
+    public static long GetTimeElapsed()
+    {
+        DateTime currentTime = DateTime.UtcNow;
+        UnixCurrentTime = ((DateTimeOffset)currentTime).ToUnixTimeSeconds();
+        return Math.Abs(Math.Abs(UnixCurrentTime) - Math.Abs(UnixInitialTime));
+    }
+}
+
 internal class Program
 {
     private static int screenHeight = 0;
@@ -583,6 +602,7 @@ internal class Program
         bool wrongTileChoosen = false;
         bool gameWon = false;
         bool gameStarted = false;
+
         while (!ShouldExit(key) && !wrongTileChoosen && !(gameWon = minefield.HasWon()))
         {
             NCurses.ClearWindow(minefieldScreen);
@@ -614,6 +634,7 @@ internal class Program
                 exclude[1] = playerPositionYX[1];
                 minefield.Add_Mines(exclude);
                 minefield.CountMineBordering();
+                Timer.InitTimer();
                 gameStarted = true;
             }
 
@@ -635,7 +656,7 @@ internal class Program
             int colorPair = 0;
             string gameResult = string.Empty;
             colorPair = wrongTileChoosen ? colorPair = 3 : colorPair = 2;
-            gameResult = wrongTileChoosen ? gameResult = "You lose!" : gameResult = "You win!";
+            gameResult = wrongTileChoosen ? gameResult = "You lose!" : gameResult = $"You win in {Timer.GetTimeElapsed()} seconds!";
             gameResult += " Press R to restart, Q to quit.";
 
             NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(colorPair));
