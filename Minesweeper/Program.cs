@@ -1,5 +1,4 @@
 ﻿using Mindmagma.Curses;
-using System.Diagnostics;
 
 internal class Mines
 {
@@ -278,6 +277,11 @@ internal class Program
 {
     private static int screenHeight = 0;
     private static int screenWidth = 0;
+
+    private static int minefieldScreenHeight = 16;
+    private static int minefieldScreenWidth = 16;
+    private static int totalMines = 40;
+
     private static bool MainMenuShown = false;
 
     private static string ShowMainMenu(int screenHeight, int screenWidth)
@@ -340,7 +344,7 @@ internal class Program
         return modes[currentModeIndex];
     }
 
-    private static void ShowCustomMenu(ref int minefieldScreenHeight, ref int minefieldScreenWidth, ref int totalMines)
+    private static void ShowCustomMenu()
     {
         nint customScreen = NCurses.NewWindow(1, screenWidth, screenHeight / 2, 0);
 
@@ -418,7 +422,7 @@ internal class Program
         NCurses.WindowRefresh(customScreen);
     }
 
-    private static void SetSizeAndMineCount(string mode, ref int minefieldScreenHeight, ref int minefieldScreenWidth, ref int totalMines)
+    private static void SetSizeAndMineCount(string mode)
     {
         int[] easyMode = [9, 9, 10];
         int[] normalMode = [16, 16, 40];
@@ -444,7 +448,7 @@ internal class Program
         }
         else
         {
-            ShowCustomMenu(ref minefieldScreenHeight, ref minefieldScreenWidth, ref totalMines);
+            ShowCustomMenu();
         }
 
         if (minefieldScreenHeight > screenHeight - 8)
@@ -467,7 +471,7 @@ internal class Program
         return key is 'q' or 'Q';
     }
 
-    private static void CalculateRemainingMines(nint topScreen, Mines minefield, int totalMines)
+    private static void CalculateRemainingMines(nint topScreen, Mines minefield)
     {
         int remainingMineCount = minefield.CountRemainingMines(totalMines);
 
@@ -478,7 +482,7 @@ internal class Program
         NCurses.WindowAttributeOff(topScreen, CursesAttribute.REVERSE);
     }
 
-    private static int[] UpdatePlayerPosition(int key, int[] playerPositionYX, int minefieldScreenHeight, int minefieldScreenWidth)
+    private static int[] UpdatePlayerPosition(int key, int[] playerPositionYX)
     {
         if (key == CursesKey.UP && playerPositionYX[0] > 0)
         {
@@ -514,11 +518,10 @@ internal class Program
         }
         NCurses.StartColor();
 
-        int minefieldScreenHeight = 16, minefieldScreenWidth = 16, totalMines = 40;
         if (!MainMenuShown)
         {
             string mode = ShowMainMenu(screenHeight, screenWidth);
-            SetSizeAndMineCount(mode, ref minefieldScreenHeight, ref minefieldScreenWidth, ref totalMines);
+            SetSizeAndMineCount(mode);
             MainMenuShown = true;
         }
 
@@ -587,7 +590,7 @@ internal class Program
 
             NCurses.WindowRefresh(minefieldScreen);
 
-            CalculateRemainingMines(topScreen, minefield, totalMines);
+            CalculateRemainingMines(topScreen, minefield);
 
             key = NCurses.WindowGetChar(minefieldScreen);
 
@@ -600,7 +603,7 @@ internal class Program
                 gameStarted = true;
             }
 
-            playerPositionYX = UpdatePlayerPosition(key, playerPositionYX, minefieldScreenHeight, minefieldScreenWidth);
+            playerPositionYX = UpdatePlayerPosition(key, playerPositionYX);
             wrongTileChoosen = minefield.OpenOrFlagTile(key, playerPositionYX);
         }
 
