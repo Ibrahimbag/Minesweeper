@@ -271,6 +271,20 @@ internal class Mines
         }
         return true;
     }
+
+    public void FlagAllMines()
+    {
+        for (int i = 0; i < ScreenHeight; i++)
+        {
+            for (int j = 0; j < ScreenWidth; j++)
+            {
+                if (Minefield[i, j].isMine)
+                {
+                    Minefield[i, j].isFlagged = true;
+                }
+            }
+        }
+    }
 }
 
 internal class Program
@@ -610,6 +624,12 @@ internal class Program
         if (wrongTileChoosen || gameWon)
         {
             NCurses.ClearWindow(minefieldScreen);
+
+            if (gameWon)
+            {
+                minefield.FlagAllMines();
+            }
+
             minefield.DisplayMines(minefieldScreen, playerPositionYX, wrongTileChoosen);
 
             int colorPair = 0;
