@@ -1,6 +1,6 @@
 ﻿using Mindmagma.Curses;
 
-internal class Mines
+internal class Mines(int minefieldScreenHeight, int minefieldScreenWidth, int totalMines)
 {
     public struct Minefield_s
     {
@@ -10,28 +10,17 @@ internal class Mines
         public bool isFlagged;
     }
 
-    private readonly int ScreenHeight;
-    private readonly int ScreenWidth;
-    private readonly int TotalMines;
-    public Minefield_s[,] Minefield;
-    private List<int[]> mineLocations;
-
-    public Mines(int screenHeight, int screenWidth, int totalMines)
-    {
-        ScreenHeight = screenHeight;
-        ScreenWidth = screenWidth;
-        TotalMines = totalMines;
-        Minefield = new Minefield_s[screenHeight, screenWidth];
-    }
+    public Minefield_s[,] Minefield = new Minefield_s[minefieldScreenHeight, minefieldScreenWidth];
+    private List<int[]> MineLocations = [];
 
     // Randomly assign mines to the minefield
-    public void Add_Mines(int[] exclude)
+    public void AddMines(int[] exclude)
     {
         Random random = new();
 
         // Get random locations and save them to a list
         List<int[]> randomLocations = [];
-        for (int i = 0; i < TotalMines; i++)
+        for (int i = 0; i < totalMines; i++)
         {
             int randomRow;
             int randomCol;
@@ -39,8 +28,8 @@ internal class Mines
 
             do
             {
-                randomRow = random.Next(0, ScreenHeight);
-                randomCol = random.Next(0, ScreenWidth);
+                randomRow = random.Next(0, minefieldScreenHeight);
+                randomCol = random.Next(0, minefieldScreenWidth);
 
                 if (exclude.SequenceEqual([randomRow, randomCol]))
                 {
@@ -71,13 +60,13 @@ internal class Mines
             Minefield[randomLocation[0], randomLocation[1]].isMine = true;
         }
 
-        mineLocations = randomLocations;
+        MineLocations = randomLocations;
     }
 
     // Count mines that the tile borders with
     public void CountMineBordering()
     {
-        foreach (int[] mineLocation in mineLocations)
+        foreach (int[] mineLocation in MineLocations)
         {
             int y = mineLocation[0];
             int x = mineLocation[1];
@@ -85,7 +74,7 @@ internal class Mines
             {
                 for (int j = x - 1; j < x + 2; j++)
                 {
-                    if (i >= 0 && j >= 0 && i < ScreenHeight && j < ScreenWidth && !Minefield[i, j].isMine)
+                    if (i >= 0 && j >= 0 && i < minefieldScreenHeight && j < minefieldScreenWidth && !Minefield[i, j].isMine)
                     {
                         Minefield[i, j].borderingMineCount++;
                     }
@@ -96,9 +85,9 @@ internal class Mines
 
     public void DisplayMines(nint minefieldScreen, int[] playerPositionYX, bool game_ended)
     {
-        for (int i = 0; i < ScreenHeight; i++)
+        for (int i = 0; i < minefieldScreenHeight; i++)
         {
-            for (int j = 0; j < ScreenWidth; j++)
+            for (int j = 0; j < minefieldScreenWidth; j++)
             {
                 int colorPair = Minefield[i, j].borderingMineCount;
                 colorPair = playerPositionYX.SequenceEqual([i, j]) ? colorPair + 9 : colorPair;
@@ -179,7 +168,7 @@ internal class Mines
         {
             for (int j = x - 1; j < x + 2; j++)
             {
-                if (i < 0 || j < 0 || i >= ScreenHeight || j >= ScreenWidth)
+                if (i < 0 || j < 0 || i >= minefieldScreenHeight || j >= minefieldScreenWidth)
                 {
                     continue;
                 }
@@ -201,7 +190,7 @@ internal class Mines
         {
             for (int j = x - 1; j < x + 2; j++)
             {
-                if (i < 0 || j < 0 || i >= ScreenHeight || j >= ScreenWidth)
+                if (i < 0 || j < 0 || i >= minefieldScreenHeight || j >= minefieldScreenWidth)
                 {
                     continue;
                 }
@@ -225,7 +214,7 @@ internal class Mines
         {
             for (int j = x - 1; j < x + 2; j++)
             {
-                if (i < 0 || j < 0 || i >= ScreenHeight || j >= ScreenWidth)
+                if (i < 0 || j < 0 || i >= minefieldScreenHeight || j >= minefieldScreenWidth)
                 {
                     continue;
                 }
@@ -274,9 +263,9 @@ internal class Mines
 
     public void FlagAllMines()
     {
-        for (int i = 0; i < ScreenHeight; i++)
+        for (int i = 0; i < minefieldScreenHeight; i++)
         {
-            for (int j = 0; j < ScreenWidth; j++)
+            for (int j = 0; j < minefieldScreenWidth; j++)
             {
                 if (Minefield[i, j].isMine)
                 {
@@ -447,9 +436,9 @@ internal class Program
             result[i] = total;
         }
 
-        int.TryParse(result[0], out minefieldScreenHeight);
-        int.TryParse(result[1], out minefieldScreenWidth);
-        int.TryParse(result[2], out totalMines);
+        _ = int.TryParse(result[0], out minefieldScreenHeight);
+        _ = int.TryParse(result[1], out minefieldScreenWidth);
+        _ = int.TryParse(result[2], out totalMines);
 
         NCurses.ClearWindow(customScreen);
         NCurses.WindowRefresh(customScreen);
@@ -583,7 +572,7 @@ internal class Program
         NCurses.InitPair(18, CursesColor.YELLOW, CursesColor.YELLOW);
         NCurses.InitPair(19, CursesColor.RED, CursesColor.RED);
 
-        int[] exclude = { 0, 0 };
+        int[] exclude = [0, 0];
 
         nint minefieldScreen = NCurses.NewWindow(
             minefieldScreenHeight + 2,
@@ -632,7 +621,7 @@ internal class Program
             {
                 exclude[0] = playerPositionYX[0];
                 exclude[1] = playerPositionYX[1];
-                minefield.Add_Mines(exclude);
+                minefield.AddMines(exclude);
                 minefield.CountMineBordering();
                 Timer.InitTimer();
                 gameStarted = true;
@@ -652,11 +641,8 @@ internal class Program
             }
 
             minefield.DisplayMines(minefieldScreen, playerPositionYX, wrongTileChoosen);
-
-            int colorPair = 0;
-            string gameResult = string.Empty;
-            colorPair = wrongTileChoosen ? colorPair = 3 : colorPair = 2;
-            gameResult = wrongTileChoosen ? gameResult = "You lose!" : gameResult = $"You win in {Timer.GetTimeElapsed()} seconds!";
+            int colorPair = wrongTileChoosen ? 3 : 2;
+            string gameResult = wrongTileChoosen ? "You lose!" : $"You win in {Timer.GetTimeElapsed()} seconds!";
             gameResult += " Press R to restart, Q to quit.";
 
             NCurses.WindowAttributeOn(minefieldScreen, NCurses.ColorPair(colorPair));
