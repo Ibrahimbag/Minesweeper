@@ -1,6 +1,4 @@
-﻿// FIX: Game becomes unplayable when user restarts the game after lose
-
-using Mindmagma.Curses;
+﻿using Mindmagma.Curses;
 
 internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int TotalMines)
 {
