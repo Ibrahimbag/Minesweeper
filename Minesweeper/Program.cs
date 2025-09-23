@@ -1,8 +1,34 @@
 ﻿using Mindmagma.Curses;
+public enum ColorIds
+{
+    None,
+    Blue,
+    Green,
+    Red,
+    Magenta,
+    Yellow,
+    Cyan,
+    White,
+    White2,
 
+    NoneHighlight,
+    BlueHighlight,
+    GreenHighlight,
+    RedHighlight,
+    MagentaHighlight,
+    YellowHighlight,
+    CyanHighlight,
+    BlackHighlight,
+    WhiteHighlight,
+
+    Flag,
+    Mine,
+};
+
+// TODO: Use records for minelocations instead of int array
 internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int TotalMines)
 {
-    public struct Minefield_s
+    public struct Tile
     {
         public bool isMine;
         public int borderingMineCount;
@@ -10,7 +36,7 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         public bool isFlagged;
     }
 
-    public Minefield_s[,] Minefield = new Minefield_s[MinefieldScreenHeight, MinefieldScreenWidth];
+    public Tile[,] Minefield = new Tile[MinefieldScreenHeight, MinefieldScreenWidth];
     private List<int[]> MineLocations = [];
 
     // Randomly assign mines to the minefield
@@ -90,34 +116,34 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
             for (int j = 0; j < MinefieldScreenWidth; j++)
             {
                 int colorPair = Minefield[i, j].borderingMineCount;
-                colorPair = (PlayerPositionYX.Row == i && PlayerPositionYX.Col == j) ? colorPair + 9 : colorPair;
+                colorPair = (PlayerPositionYX.Row == i && PlayerPositionYX.Col == j) ? colorPair + (int)ColorIds.NoneHighlight : colorPair;
 
                 if (Minefield[i, j].isFlagged && !Minefield[i, j].isOpened)
                 {
-                    colorPair = 18;
+                    colorPair = (int)ColorIds.Flag;
                 }
                 else if (Minefield[i, j].isMine && game_ended)
                 {
-                    colorPair = 19;
+                    colorPair = (int)ColorIds.Mine;
                 }
 
                 if (Minefield[i, j].isOpened)
                 {
                     NCurses.WindowAttributeOn(MinefieldScreen, NCurses.ColorPair(colorPair));
-                    colorPair = (PlayerPositionYX.Row == i && PlayerPositionYX.Col == j) ? colorPair - 9 : colorPair;
+                    colorPair = (PlayerPositionYX.Row == i && PlayerPositionYX.Col == j) ? colorPair - (int)ColorIds.NoneHighlight : colorPair;
                     NCurses.MoveWindowAddString(MinefieldScreen, i + 1, j + 1, colorPair.ToString().Replace('0', ' '));
-                    colorPair = (PlayerPositionYX.Row == i && PlayerPositionYX.Col == j) ? colorPair + 9 : colorPair;
+                    colorPair = (PlayerPositionYX.Row == i && PlayerPositionYX.Col == j) ? colorPair + (int)ColorIds.NoneHighlight : colorPair;
                     NCurses.WindowAttributeOff(MinefieldScreen, NCurses.ColorPair(colorPair));
                 }
                 else
                 {
-                    if (colorPair is >= 1 and <= 8)
+                    if (colorPair is >= (int)ColorIds.Blue and <= (int)ColorIds.White2)
                     {
-                        colorPair = 0;
+                        colorPair = (int)ColorIds.None;
                     }
-                    else if (colorPair is >= 10 and <= 17)
+                    else if (colorPair is >= (int)ColorIds.BlueHighlight and <= (int)ColorIds.WhiteHighlight)
                     {
-                        colorPair = 9;
+                        colorPair = (int)ColorIds.NoneHighlight;
                     }
 
                     NCurses.WindowAttributeOn(MinefieldScreen, NCurses.ColorPair(colorPair));
@@ -235,7 +261,7 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
     public int CountRemainingMines(int TotalMines)
     {
         int flagCount = 0;
-        foreach (Minefield_s m in Minefield)
+        foreach (Tile m in Minefield)
         {
             if (m.isFlagged)
             {
@@ -248,7 +274,7 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
 
     public bool HasWon()
     {
-        foreach (Minefield_s tile in Minefield)
+        foreach (Tile tile in Minefield)
         {
             if (!tile.isMine && !tile.isOpened)
             {
@@ -275,20 +301,15 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
 
 internal class Timer
 {
-    private static long UnixInitialTime;
-    private static long UnixCurrentTime;
-
+    private static DateTime start;
     public static void InitTimer()
     {
-        DateTime currentTime = DateTime.UtcNow;
-        UnixInitialTime = ((DateTimeOffset)currentTime).ToUnixTimeSeconds();
+        start = DateTime.UtcNow;
     }
 
     public static long GetTimeElapsed()
     {
-        DateTime currentTime = DateTime.UtcNow;
-        UnixCurrentTime = ((DateTimeOffset)currentTime).ToUnixTimeSeconds();
-        return Math.Abs(Math.Abs(UnixCurrentTime) - Math.Abs(UnixInitialTime));
+        return (long)(DateTime.UtcNow - start).TotalSeconds;
     }
 }
 
@@ -600,16 +621,18 @@ internal class Program
             NCurses.ClearWindow(context.MinefieldScreen);
             context.Minefield.DisplayMines(context.MinefieldScreen, context.PlayerPositionYX, false);
 
-            int colorPair = 0;
-            Mines.Minefield_s focusedMine = context.Minefield.Minefield[context.PlayerPositionYX.Row, context.PlayerPositionYX.Col];
+            int colorPair = (int)ColorIds.None;
+            Mines.Tile focusedMine = context.Minefield.Minefield[context.PlayerPositionYX.Row, context.PlayerPositionYX.Col];
+
             if (focusedMine.isOpened)
             {
                 colorPair = context.Minefield.Minefield[context.PlayerPositionYX.Row, context.PlayerPositionYX.Col].borderingMineCount;
             }
             else if (focusedMine.isFlagged)
             {
-                colorPair = 5;
+                colorPair = (int)ColorIds.Yellow;
             }
+
             NCurses.WindowAttributeOn(context.MinefieldScreen, NCurses.ColorPair(colorPair));
             NCurses.Box(context.MinefieldScreen, '|', '-');
             NCurses.WindowAttributeOff(context.MinefieldScreen, NCurses.ColorPair(colorPair));
@@ -687,7 +710,7 @@ internal class Program
             }
 
             context.Minefield.DisplayMines(context.MinefieldScreen, context.PlayerPositionYX, context.WrongTileChosen);
-            int colorPair = context.GameWon ? 2 : 3;
+            int colorPair = context.GameWon ? (int)ColorIds.Green : (int)ColorIds.Red;
             string gameResult = context.GameWon ? $"You win in {Timer.GetTimeElapsed()} seconds!" : "You lose!";
             gameResult += " Press R to restart, Q to quit.";
 
