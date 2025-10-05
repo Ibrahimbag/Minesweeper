@@ -714,7 +714,7 @@ internal class Program
 
     private static bool ShouldExit(int key)
     {
-        return key is 'q' or 'Q';
+        return key is 'q' or 'Q' or 'r' or 'R';
     }
 
     private static Position UpdatePlayerPosition(int key)
