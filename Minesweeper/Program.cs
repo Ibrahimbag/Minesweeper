@@ -310,7 +310,7 @@ internal class CursesUI
                 {
                     colorPair = (int)ColorIds.Flag;
                 }
-                else  if (context.Minefield.Minefield[i, j].isMine && gameEnded)
+                else if (context.Minefield.Minefield[i, j].isMine && gameEnded)
                 {
                     colorPair = (int)ColorIds.Mine;
                 }
@@ -550,24 +550,6 @@ internal class CursesUI
             NCurses.Refresh();
 
             NCurses.WindowRefresh(context.MinefieldScreen);
-
-            int ch;
-            do
-            {
-                ch = NCurses.WindowGetChar(context.MinefieldScreen);
-            }
-            while (ch is not 'r' and not 'R' and not 'q' and not 'Q');
-
-            if (ch is 'r' or 'R')
-            {
-                context.WrongTileChosen = false;
-                context.GameWon = false;
-
-                NCurses.Clear();
-                NCurses.Refresh();
-                NCurses.EndWin();
-                Program.Main();
-            }
         }
     }
 
@@ -585,9 +567,14 @@ internal class Program
 
     public static void Main()
     {
-        InitializeGame();
-        GameLoop();
-        CursesUI.ShowResult(context);
+        int key;
+        do
+        {
+            InitializeGame();
+            key = GameLoop();
+            CursesUI.ShowResult(context);
+        }
+        while (CheckForRestart(key));
 
         if (!NCurses.IsEndWin())
         {
@@ -678,7 +665,7 @@ internal class Program
         }
     }
 
-    private static void GameLoop()
+    private static int GameLoop()
     {
         int key = 0;
         Position exclude;
@@ -721,6 +708,8 @@ internal class Program
             context.PlayerPositionYX = UpdatePlayerPosition(key);
             context.WrongTileChosen = context.Minefield.OpenOrFlagTile(key, context.PlayerPositionYX);
         }
+
+        return key;
     }
 
     private static bool ShouldExit(int key)
@@ -751,5 +740,27 @@ internal class Program
         }
 
         return new Position(row, col);
+    }
+
+    private static bool CheckForRestart(int key)
+    {
+        while (key is not 'r' and not 'R' and not 'q' and not 'Q')
+        {
+            key = NCurses.WindowGetChar(context.MinefieldScreen);
+        }
+
+        if (key is 'r' or 'R')
+        {
+            context.WrongTileChosen = false;
+            context.GameWon = false;
+
+            NCurses.Clear();
+            NCurses.Refresh();
+            NCurses.EndWin();
+
+            return true;
+        }
+
+        return false;
     }
 }
