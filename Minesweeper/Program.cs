@@ -1,4 +1,7 @@
 ﻿using Mindmagma.Curses;
+using Newtonsoft.Json;
+using System.Diagnostics;
+
 public enum ColorIds
 {
     None,
@@ -39,8 +42,24 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
     private List<int[]> MineLocations = [];
 
     // Randomly assign mines to the minefield
-    public void AddMines(int[] exclude)
+    public void AddMines(int[] exclude, bool loadedGame)
     {
+        if (loadedGame)
+        {
+            for (int i = 0; i < MinefieldScreenHeight; i++)
+            {
+                for (int j = 0; j < MinefieldScreenWidth; j++)
+                {
+                    if (Minefield[i,j].isMine)
+                    {
+                        MineLocations.Add([i, j]);
+                    }
+                }
+            }
+
+            return;
+        }
+
         Random random = new();
 
         // Get random locations and save them to a list
@@ -396,29 +415,88 @@ internal class CursesUI
 
         NCurses.WindowRefresh(menuScreen);
 
+        // Ask user if they want to continue where they left off or create new game
+        nint newGameScreen = NCurses.NewWindow(3, context.ScreenWidth, context.ScreenHeight - 5, 0);
+        NCurses.Keypad(newGameScreen, true);
+        string[] choices = ["New Game", "Continue"];
+
+        int currentIndex = 0, key;
+
+        do
+        {
+            NCurses.ClearWindow(newGameScreen);
+
+            string selectedChoice = string.Format("> {0} <", choices[currentIndex]);
+
+            int horizontalOffset = 15;
+
+            if (File.Exists(SaveManager.FileName))
+            {
+                NCurses.MoveWindowAddString(
+                    newGameScreen,
+                    2,
+                    (context.ScreenWidth / 2) - (choices[1].Length / 2) + horizontalOffset,
+                    currentIndex == 1 ? selectedChoice : choices[1]
+                );
+            }
+            else
+            {
+                horizontalOffset = 0;
+            }
+
+            NCurses.MoveWindowAddString(
+                newGameScreen,
+                2,
+                (context.ScreenWidth / 2) - (choices[0].Length / 2) - horizontalOffset,
+                currentIndex == 0 ? selectedChoice : choices[0]
+            );
+
+            key = NCurses.WindowGetChar(newGameScreen);
+            if (key == CursesKey.RIGHT && currentIndex < choices.Length - 1)
+            {
+                currentIndex++;
+            }
+            else if (key == CursesKey.LEFT && currentIndex > 0)
+            {
+                currentIndex--;
+            }
+
+            NCurses.WindowRefresh(newGameScreen);
+        }
+        while (key != 10);
+
+        NCurses.ClearWindow(newGameScreen);
+        NCurses.WindowRefresh(newGameScreen);
+
+        if (currentIndex == 1)
+        {
+            NCurses.ClearWindow(menuScreen);
+            NCurses.WindowRefresh(menuScreen);
+            return "Load";
+        }
+
         nint difficultyScreen = NCurses.NewWindow(3, context.ScreenWidth, context.ScreenHeight - 5, 0);
         NCurses.Keypad(difficultyScreen, true);
-
         string[] modes = ["<- Easy ->", "<- Normal ->", "<- Hard ->", "<- Custom ->"];
-        int currentModeIndex = 0;
 
-        int key;
+        currentIndex = 0; 
+
         do
         {
             NCurses.ClearWindow(difficultyScreen);
             string notice = "Choose your difficulty using left or right arrow key";
             NCurses.MoveWindowAddString(difficultyScreen, 0, (context.ScreenWidth / 2) - (notice.Length / 2), notice);
-            NCurses.MoveWindowAddString(difficultyScreen, 2, (context.ScreenWidth / 2) - (modes[currentModeIndex].Length / 2), modes[currentModeIndex]);
+            NCurses.MoveWindowAddString(difficultyScreen, 2, (context.ScreenWidth / 2) - (modes[currentIndex].Length / 2), modes[currentIndex]);
             NCurses.WindowRefresh(difficultyScreen);
 
             key = NCurses.WindowGetChar(difficultyScreen);
-            if (key == CursesKey.RIGHT && currentModeIndex < modes.Length - 1)
+            if (key == CursesKey.RIGHT && currentIndex < modes.Length - 1)
             {
-                currentModeIndex++;
+                currentIndex++;
             }
-            else if (key == CursesKey.LEFT && currentModeIndex > 0)
+            else if (key == CursesKey.LEFT && currentIndex > 0)
             {
-                currentModeIndex--;
+                currentIndex--;
             }
         }
         while (key != 10);
@@ -428,7 +506,7 @@ internal class CursesUI
         NCurses.WindowRefresh(menuScreen);
         NCurses.WindowRefresh(difficultyScreen);
 
-        return modes[currentModeIndex];
+        return modes[currentIndex];
     }
 
     public static void ShowCustomMenu(GameContext context)
@@ -561,6 +639,75 @@ internal class CursesUI
     }
 }
 
+// TODO: Add saving and loading feature so players can continue from where they left from
+// Use the newtonsoft json serializer library for saving files
+// https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/how-to
+internal static class SaveManager
+{
+    public static readonly string FileName = "save.json";
+
+    private class SaveData
+    {
+        // Minefield settings
+        public int MinefieldScreenHeight { get; set; }
+        public int MinefieldScreenWidth { get; set; }
+        public int TotalMines { get; set; }
+
+        // Game state
+        public Mines.Tile[,] Minefield { get; set; }
+        public bool MainMenuShown { get; set; }
+        public bool WrongTileChosen { get; set; }
+        public bool GameWon { get; set; }
+
+        // Player position
+        public Position PlayerPositionYX { get; set; }
+    }
+
+    public static void SaveGame(GameContext context)
+    {
+        SaveData data = new()
+        {
+            MinefieldScreenHeight = context.MinefieldScreenHeight,
+            MinefieldScreenWidth = context.MinefieldScreenWidth,
+            TotalMines = context.TotalMines,
+            Minefield = context.Minefield.Minefield,
+            MainMenuShown = context.MainMenuShown,
+            WrongTileChosen = context.WrongTileChosen,
+            GameWon = context.GameWon,
+            PlayerPositionYX = context.PlayerPositionYX,
+        };
+
+        string jsonString = JsonConvert.SerializeObject(data);
+
+        File.WriteAllText(FileName, jsonString);
+    }
+
+    public static void LoadGame(GameContext context)
+    {
+        if (!File.Exists(FileName))
+        {
+            throw new FileNotFoundException("Save file not found.", FileName);
+        }
+
+        string jsonString = File.ReadAllText(FileName);
+        SaveData data = JsonConvert.DeserializeObject<SaveData>(jsonString) 
+            ?? throw new InvalidDataException("Save file is corrupted or contains invalid data.");
+
+        context.MinefieldScreenHeight = data.MinefieldScreenHeight;
+        context.MinefieldScreenWidth = data.MinefieldScreenWidth;
+        context.TotalMines = data.TotalMines;
+        context.Minefield = new(context.MinefieldScreenHeight, context.MinefieldScreenWidth, context.TotalMines);
+        context.Minefield.Minefield = data.Minefield;
+        context.MainMenuShown = data.MainMenuShown;
+        context.WrongTileChosen = data.WrongTileChosen;
+        context.GameWon = data.GameWon;
+        context.PlayerPositionYX = data.PlayerPositionYX;
+
+        context.Minefield.AddMines([-1, -1], true);
+        Timer.InitTimer();
+    }
+}
+
 internal class Program
 {
     private static readonly GameContext context = new();
@@ -570,8 +717,8 @@ internal class Program
         int key;
         do
         {
-            InitializeGame();
-            key = GameLoop();
+            string mode = InitializeGame();
+            key = GameLoop(mode);
             CursesUI.ShowResult(context);
         }
         while (CheckForRestart(key));
@@ -582,7 +729,7 @@ internal class Program
         }
     }
 
-    private static void InitializeGame()
+    private static string InitializeGame()
     {
         context.Screen = NCurses.InitScreen();
         NCurses.CBreak();
@@ -601,11 +748,28 @@ internal class Program
             Environment.Exit(1);
         }
 
+        string mode = "";
         if (!context.MainMenuShown)
         {
-            string mode = CursesUI.ShowMainMenu(context);
+            mode = CursesUI.ShowMainMenu(context);
             SetSizeAndMineCount(mode);
             context.MainMenuShown = true;
+        }
+
+        context.TopScreen = NCurses.NewWindow(1, context.ScreenWidth, 0, 0);
+
+        context.Minefield = new(context.MinefieldScreenHeight, context.MinefieldScreenWidth, context.TotalMines);
+
+        if (mode.Equals("Load"))
+        {
+            try
+            {
+                SaveManager.LoadGame(context);
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e.Message);
+            }
         }
 
         context.MinefieldScreen = NCurses.NewWindow(
@@ -616,9 +780,7 @@ internal class Program
         );
         NCurses.Keypad(context.MinefieldScreen, true);
 
-        context.TopScreen = NCurses.NewWindow(1, context.ScreenWidth, 0, 0);
-
-        context.Minefield = new(context.MinefieldScreenHeight, context.MinefieldScreenWidth, context.TotalMines);
+        return mode;
     }
 
     private static void SetSizeAndMineCount(string mode)
@@ -645,7 +807,7 @@ internal class Program
             context.MinefieldScreenWidth = hardMode[1];
             context.TotalMines = hardMode[2];
         }
-        else
+        else if (mode.Contains("Custom"))
         {
             CursesUI.ShowCustomMenu(context);
         }
@@ -665,7 +827,7 @@ internal class Program
         }
     }
 
-    private static int GameLoop()
+    private static int GameLoop(string mode)
     {
         int key = 0;
         Position exclude;
@@ -673,6 +835,8 @@ internal class Program
 
         while (!ShouldExit(key) && !context.WrongTileChosen && !(context.GameWon = context.Minefield.HasWon()))
         {
+            if (key == 's') SaveManager.SaveGame(context);
+
             NCurses.ClearWindow(context.MinefieldScreen);
             CursesUI.DisplayMines(context, false);
 
@@ -696,10 +860,10 @@ internal class Program
 
             key = NCurses.WindowGetChar(context.MinefieldScreen);
 
-            if (!gameStarted && key == ' ')
+            if (!gameStarted && key == ' ' && !mode.Equals("Load"))
             {
                 exclude = context.PlayerPositionYX;
-                context.Minefield.AddMines([exclude.Row, exclude.Col]);
+                context.Minefield.AddMines([exclude.Row, exclude.Col], false);
                 context.Minefield.CountMineBordering();
                 Timer.InitTimer();
                 gameStarted = true;
