@@ -42,24 +42,8 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
     private List<int[]> MineLocations = [];
 
     // Randomly assign mines to the minefield
-    public void AddMines(int[] exclude, bool loadedGame)
+    public void AddMines(int[] exclude)
     {
-        if (loadedGame)
-        {
-            for (int i = 0; i < MinefieldScreenHeight; i++)
-            {
-                for (int j = 0; j < MinefieldScreenWidth; j++)
-                {
-                    if (Minefield[i,j].isMine)
-                    {
-                        MineLocations.Add([i, j]);
-                    }
-                }
-            }
-
-            return;
-        }
-
         Random random = new();
 
         // Get random locations and save them to a list
@@ -639,9 +623,7 @@ internal class CursesUI
     }
 }
 
-// TODO: Add saving and loading feature so players can continue from where they left from
-// Use the newtonsoft json serializer library for saving files
-// https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/how-to
+// Add saving and loading feature so players can continue from where they left from
 internal static class SaveManager
 {
     public static readonly string FileName = "save.json";
@@ -703,7 +685,6 @@ internal static class SaveManager
         context.GameWon = data.GameWon;
         context.PlayerPositionYX = data.PlayerPositionYX;
 
-        context.Minefield.AddMines([-1, -1], true);
         Timer.InitTimer();
     }
 }
@@ -863,7 +844,7 @@ internal class Program
             if (!gameStarted && key == ' ' && !mode.Equals("Load"))
             {
                 exclude = context.PlayerPositionYX;
-                context.Minefield.AddMines([exclude.Row, exclude.Col], false);
+                context.Minefield.AddMines([exclude.Row, exclude.Col]);
                 context.Minefield.CountMineBordering();
                 Timer.InitTimer();
                 gameStarted = true;
