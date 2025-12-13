@@ -256,9 +256,11 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
     }
 }
 
-internal class Timer
+internal static class Timer
 {
     private static DateTime start;
+    public static long SavedTimeElapsed = 0;
+
     public static void InitTimer()
     {
         start = DateTime.UtcNow;
@@ -266,7 +268,7 @@ internal class Timer
 
     public static long GetTimeElapsed()
     {
-        return (long)(DateTime.UtcNow - start).TotalSeconds;
+        return (long)(DateTime.UtcNow - start).TotalSeconds + SavedTimeElapsed;
     }
 }
 
@@ -643,6 +645,8 @@ internal static class SaveManager
 
         // Player position
         public Position PlayerPositionYX { get; set; }
+
+        public long SavedTimeElapsed { get; set; }
     }
 
     public static void SaveGame(GameContext context)
@@ -657,6 +661,7 @@ internal static class SaveManager
             WrongTileChosen = context.WrongTileChosen,
             GameWon = context.GameWon,
             PlayerPositionYX = context.PlayerPositionYX,
+            SavedTimeElapsed = Timer.GetTimeElapsed()
         };
 
         string jsonString = JsonConvert.SerializeObject(data);
@@ -684,6 +689,7 @@ internal static class SaveManager
         context.WrongTileChosen = data.WrongTileChosen;
         context.GameWon = data.GameWon;
         context.PlayerPositionYX = data.PlayerPositionYX;
+        Timer.SavedTimeElapsed = data.SavedTimeElapsed;
 
         Timer.InitTimer();
     }
