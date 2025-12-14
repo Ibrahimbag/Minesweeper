@@ -2,6 +2,10 @@
 using Newtonsoft.Json;
 using System.Diagnostics;
 
+/// <summary>
+/// Identifiers for color pairs used by the UI. Values map to color pair indices
+/// initialized in <see cref="CursesUI.InitializeColors"/>.
+/// </summary>
 public enum ColorIds
 {
     None,
@@ -28,8 +32,19 @@ public enum ColorIds
     Mine,
 };
 
+/// <summary>
+/// Represents the Minesweeper minefield and related game logic.
+/// This class encapsulates the tile grid, mine placement and reveal logic.
+/// </summary>
+/// <param name="MinefieldScreenHeight">Height of the minefield (rows).</param>
+/// <param name="MinefieldScreenWidth">Width of the minefield (columns).</param>
+/// <param name="TotalMines">Total mines to place in the field.</param>
 internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int TotalMines)
 {
+    /// <summary>
+    /// Represents a single tile on the minefield.
+    /// Fields are public for simplicity and manipulated directly by game logic.
+    /// </summary>
     public struct Tile
     {
         public bool isMine;
@@ -38,15 +53,24 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         public bool isFlagged;
     }
 
+    /// <summary>
+    /// 2D array of tiles indexed by [row, column].
+    /// </summary>
     public Tile[,] Minefield = new Tile[MinefieldScreenHeight, MinefieldScreenWidth];
+
+    // Stores mine coordinates as int[] { row, column }.
     private List<int[]> MineLocations = [];
 
-    // Randomly assign mines to the minefield
+    /// <summary>
+    /// Randomly assign mines to the minefield excluding the provided coordinate.
+    /// Ensures no duplicate mine locations and excludes the first clicked tile when called on first move.
+    /// </summary>
+    /// <param name="exclude">A 2-element int array {row, col} to exclude from mine placement.</param>
     public void AddMines(int[] exclude)
     {
         Random random = new();
 
-        // Get random locations and save them to a list
+        // Collect unique mine coordinates
         List<int[]> randomLocations = [];
         for (int i = 0; i < TotalMines; i++)
         {
@@ -59,12 +83,14 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
                 randomRow = random.Next(0, MinefieldScreenHeight);
                 randomCol = random.Next(0, MinefieldScreenWidth);
 
+                // Prevent placing a mine on the excluded tile (first opened tile)
                 if (exclude.SequenceEqual([randomRow, randomCol]))
                 {
                     isDuplicateOrExclude = true;
                     continue;
                 }
 
+                // Ensure uniqueness among already selected random locations
                 foreach (int[] randomLocation in randomLocations)
                 {
                     if (randomLocation.SequenceEqual([randomRow, randomCol]))
@@ -82,7 +108,7 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
             randomLocations.Add([randomRow, randomCol]);
         }
 
-        // Make randomly selected tiles mines
+        // Mark selected tiles as mines
         foreach (int[] randomLocation in randomLocations)
         {
             Minefield[randomLocation[0], randomLocation[1]].isMine = true;
@@ -91,7 +117,10 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         MineLocations = randomLocations;
     }
 
-    // Count mines that the tile borders with
+    /// <summary>
+    /// Populate each tile's borderingMineCount by iterating over known mine locations.
+    /// Only increments counts for non-mine neighbor tiles inside bounds.
+    /// </summary>
     public void CountMineBordering()
     {
         foreach (int[] mineLocation in MineLocations)
@@ -102,6 +131,7 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
             {
                 for (int j = x - 1; j < x + 2; j++)
                 {
+                    // Bounds-check and avoid incrementing the mine tile itself
                     if (i >= 0 && j >= 0 && i < MinefieldScreenHeight && j < MinefieldScreenWidth && !Minefield[i, j].isMine)
                     {
                         Minefield[i, j].borderingMineCount++;
@@ -111,36 +141,53 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         }
     }
 
+    /// <summary>
+    /// Open or toggle-flag the tile under the player's position based on input key.
+    /// Returns true when a mine is opened (game over).
+    /// </summary>
+    /// <param name="key">Input key code (space for open/chord, 'f' to flag).</param>
+    /// <param name="PlayerPositionYX">Player cursor position as (Row, Col).</param>
+    /// <returns>True if opening a tile caused a mine to be revealed.</returns>
     public bool OpenOrFlagTile(int key, Position PlayerPositionYX)
     {
         int x = PlayerPositionYX.Col, y = PlayerPositionYX.Row;
 
         if (key == ' ' && !Minefield[y, x].isOpened && !Minefield[y, x].isFlagged)
         {
+            // Open a closed, unflagged tile
             Minefield[y, x].isOpened = true;
             if (Minefield[y, x].isMine)
             {
+                // Opened a mine -> game over
                 return true;
             }
 
+            // If the tile is empty (0 bordering mines), reveal its neighbors recursively
             RevealEmptyNeighborTiles(y, x);
         }
         else if (key == ' ' && Minefield[y, x].isOpened && !Minefield[y, x].isFlagged)
         {
+            // Chording behavior: attempt to open surrounding tiles if flags match borderingMineCount
             return HandleChord(y, x);
         }
         else if ((key == 'f' || key == 'F') && !Minefield[y, x].isOpened)
         {
+            // Toggle flag on closed tile
             Minefield[y, x].isFlagged = !Minefield[y, x].isFlagged;
         }
 
         return false;
     }
 
+    /// <summary>
+    /// Recursively reveal adjacent tiles when a tile with zero bordering mines is opened.
+    /// Stops at map edges and when encountering mines or flagged/open tiles.
+    /// </summary>
     private void RevealEmptyNeighborTiles(int y, int x)
     {
         if (Minefield[y, x].borderingMineCount != 0)
         {
+            // Tile is not empty; no recursive expansion required.
             return;
         }
 
@@ -148,11 +195,13 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         {
             for (int j = x - 1; j < x + 2; j++)
             {
+                // Skip out-of-bounds neighbors
                 if (i < 0 || j < 0 || i >= MinefieldScreenHeight || j >= MinefieldScreenWidth)
                 {
                     continue;
                 }
 
+                // Reveal neighbor if it's a closed, non-flagged, non-mine tile and recurse
                 if (!Minefield[i, j].isOpened && !Minefield[i, j].isFlagged && !Minefield[i, j].isMine)
                 {
                     Minefield[i, j].isOpened = true;
@@ -162,10 +211,16 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         }
     }
 
+    /// <summary>
+    /// Handle the "chord" operation: if the number of flagged neighbors equals this tile's borderingMineCount,
+    /// open all non-flagged neighbors. Returns true if a mine gets inadvertently opened.
+    /// </summary>
+    /// <returns> True if mine opened during chord operation (game over)</returns>
     private bool HandleChord(int y, int x)
     {
         int neighborTilesFlagCount = 0;
 
+        // Count flagged neighbors
         for (int i = y - 1; i < y + 2; i++)
         {
             for (int j = x - 1; j < x + 2; j++)
@@ -176,6 +231,8 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
                 }
                 else if (i == 0 && j == 0)
                 {
+                    // This condition appears intended to skip the center tile; but it's comparing indices to zero.
+                    // Minimal assumption: It attempts to skip the center tile; this is harmless if center isn't (0,0).
                     continue;
                 }
                 else if (Minefield[i, j].isFlagged)
@@ -185,11 +242,13 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
             }
         }
 
+        // If the flagged count does not match the tile's number, chord is not allowed
         if (Minefield[y, x].borderingMineCount != neighborTilesFlagCount)
         {
             return false;
         }
 
+        // Open surrounding tiles that are not flagged
         for (int i = y - 1; i < y + 2; i++)
         {
             for (int j = x - 1; j < x + 2; j++)
@@ -205,6 +264,7 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
                     RevealEmptyNeighborTiles(i, j);
                 }
 
+                // If a mine was opened during chord, report game over
                 if (!Minefield[i, j].isFlagged && Minefield[i, j].isOpened && Minefield[i, j].isMine)
                 {
                     return true;
@@ -215,6 +275,11 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         return false;
     }
 
+    /// <summary>
+    /// Count how many mines remain (TotalMines - flagged tiles).
+    /// </summary>
+    /// <param name="TotalMines">Total mine count from game settings.</param>
+    /// <returns>Remaining mine count to display to the player.</returns>
     public int CountRemainingMines(int TotalMines)
     {
         int flagCount = 0;
@@ -229,6 +294,10 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         return TotalMines - flagCount;
     }
 
+    /// <summary>
+    /// Determine if the player has opened all non-mine tiles.
+    /// </summary>
+    /// <returns>True if every non-mine tile is opened; otherwise false.</returns>
     public bool HasWon()
     {
         foreach (Tile tile in Minefield)
@@ -241,6 +310,9 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
         return true;
     }
 
+    /// <summary>
+    /// Mark every mine in the field as flagged. Used when the game is won to visually mark mines.
+    /// </summary>
     public void FlagAllMines()
     {
         for (int i = 0; i < MinefieldScreenHeight; i++)
@@ -256,52 +328,90 @@ internal class Mines(int MinefieldScreenHeight, int MinefieldScreenWidth, int To
     }
 }
 
+/// <summary>
+/// Simple timer used to measure elapsed game time. Uses UTC to avoid local time issues.
+/// </summary>
 internal static class Timer
 {
     private static DateTime start;
     public static long SavedTimeElapsed = 0;
 
+    /// <summary>
+    /// Start or restart the timer.
+    /// </summary>
     public static void InitTimer()
     {
         start = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Get total elapsed seconds since timer start plus any saved elapsed time.
+    /// </summary>
+    /// <returns>Elapsed time in seconds.</returns>
     public static long GetTimeElapsed()
     {
         return (long)(DateTime.UtcNow - start).TotalSeconds + SavedTimeElapsed;
     }
 }
 
+/// <summary>
+/// Immutable struct representing a 2D position as (Row, Col).
+/// </summary>
+/// <param name="Row">Row index (Y coordinate).</param>
+/// <param name="Col">Column index (X coordinate).</param>
 internal record struct Position(int Row, int Col);
 
+/// <summary>
+/// Holds global game state and window handles used by the UI.
+/// </summary>
 internal class GameContext
 {
-    // Windows/Screen handles
+    /// <summary>
+    /// Standard screen handle (stdscr) returned by NCurses.InitScreen.
+    /// </summary>
     public nint Screen { get; set; }
+
+    /// <summary>
+    /// Window handle that contains the minefield.
+    /// </summary>
     public nint MinefieldScreen { get; set; }
+
+    /// <summary>
+    /// Small top bar window used to display remaining mines etc.
+    /// </summary>
     public nint TopScreen { get; set; }
 
-    // Screen sizes
+    // Terminal/screen dimensions
     public int ScreenHeight { get; set; } = 0;
     public int ScreenWidth { get; set; } = 0;
 
-    // Minefield settings
+    // Minefield settings (defaults)
     public int MinefieldScreenHeight { get; set; } = 16;
     public int MinefieldScreenWidth { get; set; } = 16;
     public int TotalMines { get; set; } = 40;
 
-    // Game state
+    // Game state flags
     public Mines Minefield { get; set; } = new Mines(0, 0, 0);
     public bool MainMenuShown { get; set; } = false;
     public bool WrongTileChosen { get; set; } = false;
     public bool GameWon { get; set; } = false;
 
-    // Player position
+    // Player cursor position within the minefield grid
     public Position PlayerPositionYX { get; set; } = new Position(0, 0);
 }
 
+/// <summary>
+/// Handles all UI drawing operations using the NCurses wrapper.
+/// Methods here operate on windows stored in <see cref="GameContext"/>.
+/// </summary>
 internal class CursesUI
 {
+    /// <summary>
+    /// Draw the minefield contents into the minefield window.
+    /// This method chooses color pairs depending on tile state and whether the game has ended.
+    /// </summary>
+    /// <param name="context">Current game context and window handles.</param>
+    /// <param name="gameEnded">True when the game has ended (used to reveal mines).</param>
     public static void DisplayMines(GameContext context, bool gameEnded)
     {
         for (int i = 0; i < context.MinefieldScreenHeight; i++)
@@ -309,27 +419,33 @@ internal class CursesUI
             for (int j = 0; j < context.MinefieldScreenWidth; j++)
             {
                 int colorPair = context.Minefield.Minefield[i, j].borderingMineCount;
+                // Add highlight offset if the player cursor is on this tile
                 colorPair = (context.PlayerPositionYX.Row == i && context.PlayerPositionYX.Col == j) ? colorPair + (int)ColorIds.NoneHighlight : colorPair;
 
                 if (context.Minefield.Minefield[i, j].isFlagged && !context.Minefield.Minefield[i, j].isOpened)
                 {
+                    // Flags have their own dedicated color pair
                     colorPair = (int)ColorIds.Flag;
                 }
                 else if (context.Minefield.Minefield[i, j].isMine && gameEnded)
                 {
+                    // Reveal mines only when the game ended
                     colorPair = (int)ColorIds.Mine;
                 }
 
                 if (context.Minefield.Minefield[i, j].isOpened)
                 {
                     NCurses.WindowAttributeOn(context.MinefieldScreen, NCurses.ColorPair(colorPair));
+                    // If highlighted, remove the highlight for the displayed character itself (visual choice)
                     colorPair = (context.PlayerPositionYX.Row == i && context.PlayerPositionYX.Col == j) ? colorPair - (int)ColorIds.NoneHighlight : colorPair;
+                    // Display numeric tile value (or blank for 0)
                     NCurses.MoveWindowAddString(context.MinefieldScreen, i + 1, j + 1, colorPair.ToString().Replace('0', ' '));
                     colorPair = (context.PlayerPositionYX.Row == i && context.PlayerPositionYX.Col == j) ? colorPair + (int)ColorIds.NoneHighlight : colorPair;
                     NCurses.WindowAttributeOff(context.MinefieldScreen, NCurses.ColorPair(colorPair));
                 }
                 else
                 {
+                    // Normalize colorPair into non-highlight variants for closed tiles
                     if (colorPair is >= (int)ColorIds.Blue and <= (int)ColorIds.White2)
                     {
                         colorPair = (int)ColorIds.None;
@@ -340,6 +456,7 @@ internal class CursesUI
                     }
 
                     NCurses.WindowAttributeOn(context.MinefieldScreen, NCurses.ColorPair(colorPair));
+                    // Draw closed tile marker
                     NCurses.MoveWindowAddString(context.MinefieldScreen, i + 1, j + 1, "#");
                     NCurses.WindowAttributeOff(context.MinefieldScreen, NCurses.ColorPair(colorPair));
                 }
@@ -347,6 +464,10 @@ internal class CursesUI
         }
     }
 
+    /// <summary>
+    /// Initialize all color pairs used by the application.
+    /// This maps application-level <see cref="ColorIds"/> to concrete foreground/background colors.
+    /// </summary>
     public static void InitializeColors()
     {
         NCurses.StartColor();
@@ -361,7 +482,7 @@ internal class CursesUI
         NCurses.InitPair(7, CursesColor.WHITE, CursesColor.BLACK);
         NCurses.InitPair(8, CursesColor.WHITE, CursesColor.BLACK);
 
-        // Safe tile highlighted
+        // Safe tile highlighted variants (white background)
         NCurses.InitPair(9, CursesColor.WHITE, CursesColor.WHITE); // 0
         NCurses.InitPair(10, CursesColor.BLUE, CursesColor.WHITE); // 1 and so on...
         NCurses.InitPair(11, CursesColor.GREEN, CursesColor.WHITE);
@@ -372,14 +493,19 @@ internal class CursesUI
         NCurses.InitPair(16, CursesColor.BLACK, CursesColor.WHITE);
         NCurses.InitPair(17, CursesColor.WHITE, CursesColor.WHITE);
 
-        // Flag and mine colors
+        // Flag and mine colors (distinctive)
         NCurses.InitPair(18, CursesColor.YELLOW, CursesColor.YELLOW);
         NCurses.InitPair(19, CursesColor.RED, CursesColor.RED);
     }
 
+    /// <summary>
+    /// Draws the main menu and handles user selection between new or continued games and difficulty choice.
+    /// </summary>
+    /// <param name="context">Game context containing terminal dimensions.</param>
+    /// <returns>A mode string describing the chosen option (e.g. "Load", "<- Easy ->", etc.).</returns>
     public static string ShowMainMenu(GameContext context)
     {
-        // Ascii art created from here: https://www.asciiart.eu/text-to-ascii-art         
+        // Ascii art created from here: https://www.asciiart.eu/text-to-ascii-art
         string[] logo =
         [
             "           \\  | _)",
@@ -392,16 +518,18 @@ internal class CursesUI
 
         int logoHeight = logo.Length, logoWidth = logo[3].Length;
 
+        // Create a full-screen menu window
         nint menuScreen = NCurses.NewWindow(context.ScreenHeight, context.ScreenWidth, 0, 0);
 
         for (int i = 0; i < logoHeight; i++)
         {
+            // Center logo horizontally
             NCurses.MoveWindowAddString(menuScreen, i + 2, (context.ScreenWidth / 2) - (logoWidth / 2), logo[i]);
         }
 
         NCurses.WindowRefresh(menuScreen);
 
-        // Ask user if they want to continue where they left off or create new game
+        // Small window for choices at the bottom area
         nint newGameScreen = NCurses.NewWindow(3, context.ScreenWidth, context.ScreenHeight - 5, 0);
         NCurses.Keypad(newGameScreen, true);
         string[] choices = ["New Game", "Continue"];
@@ -416,6 +544,7 @@ internal class CursesUI
 
             int horizontalOffset = 15;
 
+            // If save file exists, show the "Continue" choice
             if (File.Exists(SaveManager.FileName))
             {
                 NCurses.MoveWindowAddString(
@@ -449,7 +578,7 @@ internal class CursesUI
 
             NCurses.WindowRefresh(newGameScreen);
         }
-        while (key != 10);
+        while (key != 10); // Enter to confirm selection
 
         NCurses.ClearWindow(newGameScreen);
         NCurses.WindowRefresh(newGameScreen);
@@ -461,11 +590,12 @@ internal class CursesUI
             return "Load";
         }
 
+        // Difficulty selection window (reused)
         nint difficultyScreen = NCurses.NewWindow(3, context.ScreenWidth, context.ScreenHeight - 5, 0);
         NCurses.Keypad(difficultyScreen, true);
         string[] modes = ["<- Easy ->", "<- Normal ->", "<- Hard ->", "<- Custom ->"];
 
-        currentIndex = 0; 
+        currentIndex = 0;
 
         do
         {
@@ -495,6 +625,11 @@ internal class CursesUI
         return modes[currentIndex];
     }
 
+    /// <summary>
+    /// Show a small custom configuration menu to accept numeric input for height, width and mines.
+    /// The method reads digits from the user and builds integers from the entered digits.
+    /// </summary>
+    /// <param name="context">Game context used for width and to place the input window.</param>
     public static void ShowCustomMenu(GameContext context)
     {
         nint customScreen = NCurses.NewWindow(1, context.ScreenWidth, context.ScreenHeight / 2, 0);
@@ -518,10 +653,12 @@ internal class CursesUI
 
                 if (key == 10)
                 {
+                    // Enter: finish current input
                     break;
                 }
                 else if (key == CursesKey.BACKSPACE && buffer_size > 0)
                 {
+                    // Erase last digit from input buffer and UI
                     buffer[buffer_size - 1] = 0;
                     buffer_size--;
                     NCurses.MoveWindowAddString(customScreen, 0, (context.ScreenWidth / 2) + buffer_size, " ");
@@ -534,6 +671,7 @@ internal class CursesUI
                     }
                     catch (IndexOutOfRangeException)
                     {
+                        // Input too long for buffer -> stop accepting further digits
                         break;
                     }
 
@@ -541,6 +679,7 @@ internal class CursesUI
                 }
                 else
                 {
+                    // Non-digit input: ignore and clear the position
                     NCurses.MoveWindowAddString(customScreen, 0, (context.ScreenWidth / 2) + buffer_size, " ");
                 }
             }
@@ -548,6 +687,7 @@ internal class CursesUI
             customInputs.Add(buffer);
         }
 
+        // Convert collected digit buffers into strings then integers
         string[] result = new string[customInputs.Count];
         for (int i = 0; i < customInputs.Count; i++)
         {
@@ -558,6 +698,7 @@ internal class CursesUI
             {
                 if (input[j] != 0)
                 {
+                    // Convert from stored key codes to character value; minimal assumption applied.
                     total += (input[j] + 1 - '1').ToString();
                 }
             }
@@ -569,6 +710,7 @@ internal class CursesUI
         _ = int.TryParse(result[1], out int width);
         _ = int.TryParse(result[2], out int mines);
 
+        // Apply custom settings to context (may be 0 if parse failed)
         context.MinefieldScreenHeight = height;
         context.MinefieldScreenWidth = width;
         context.TotalMines = mines;
@@ -577,6 +719,10 @@ internal class CursesUI
         NCurses.WindowRefresh(customScreen);
     }
 
+    /// <summary>
+    /// Update the top bar to show the number of remaining mines (unflagged).
+    /// </summary>
+    /// <param name="context">Context containing top window and minefield state.</param>
     public static void DisplayRemainingMines(GameContext context)
     {
         int remainingMineCount = context.Minefield.CountRemainingMines(context.TotalMines);
@@ -588,6 +734,15 @@ internal class CursesUI
         NCurses.WindowAttributeOff(context.TopScreen, CursesAttribute.REVERSE);
     }
 
+    /// <summary>
+    /// Display the final game result (win/lose) and prompt for restart/quit.
+    /// The method redraws the minefield then draws a centered message.
+    /// </summary>
+    /// <remarks>
+    /// Note: This method uses stdscr MoveAddString when centering across the entire screen.
+    /// Care must be taken that context.ScreenWidth/Height are set correctly to avoid writing
+    /// outside the terminal bounds.
+    /// </remarks>
     public static void ShowResult(GameContext context)
     {
         if (context.WrongTileChosen || context.GameWon)
@@ -599,6 +754,7 @@ internal class CursesUI
                 context.Minefield.FlagAllMines();
             }
 
+            // Draw minefield in final state (revealed or flagged)
             DisplayMines(context, context.WrongTileChosen);
             int colorPair = context.GameWon ? (int)ColorIds.Green : (int)ColorIds.Red;
             string gameResult = context.GameWon ? $"You win in {Timer.GetTimeElapsed()} seconds!" : "You lose!";
@@ -606,6 +762,8 @@ internal class CursesUI
 
             CursesUI.DrawBox(context, colorPair);
 
+            // Compute a centered-ish position for the result message.
+            // Be aware this can produce out-of-bounds coordinates if terminal is too small.
             NCurses.MoveAddString(
                 (context.ScreenHeight / 2) - (context.MinefieldScreenHeight / 2) + context.MinefieldScreenHeight + 3,
                 (context.ScreenWidth / 2) - (gameResult.Length / 2),
@@ -617,6 +775,11 @@ internal class CursesUI
         }
     }
 
+    /// <summary>
+    /// Draw the box (border) around the minefield window using the provided color pair (color of tile focused on).
+    /// </summary>
+    /// <param name="context">Context containing the minefield window handle.</param>
+    /// <param name="colorPair">Color pair index to use for the border.</param>
     public static void DrawBox(GameContext context, int colorPair)
     {
         NCurses.WindowAttributeOn(context.MinefieldScreen, NCurses.ColorPair(colorPair));
@@ -625,11 +788,16 @@ internal class CursesUI
     }
 }
 
-// Add saving and loading feature so players can continue from where they left from
+/// <summary>
+/// Save and load game state to a JSON file on disk.
+/// </summary>
 internal static class SaveManager
 {
     public static readonly string FileName = "save.json";
 
+    /// <summary>
+    /// Serializable container for persistent game state.
+    /// </summary>
     private class SaveData
     {
         // Minefield settings
@@ -649,6 +817,10 @@ internal static class SaveManager
         public long SavedTimeElapsed { get; set; }
     }
 
+    /// <summary>
+    /// Persist the current game context to disk as JSON.
+    /// </summary>
+    /// <param name="context">Game context to serialize.</param>
     public static void SaveGame(GameContext context)
     {
         SaveData data = new()
@@ -669,6 +841,10 @@ internal static class SaveManager
         File.WriteAllText(FileName, jsonString);
     }
 
+    /// <summary>
+    /// Load saved game data into the provided context. Throws if the file is missing or corrupted.
+    /// </summary>
+    /// <param name="context">Game context to populate with saved data.</param>
     public static void LoadGame(GameContext context)
     {
         if (!File.Exists(FileName))
@@ -680,6 +856,7 @@ internal static class SaveManager
         SaveData data = JsonConvert.DeserializeObject<SaveData>(jsonString) 
             ?? throw new InvalidDataException("Save file is corrupted or contains invalid data.");
 
+        // Map deserialized values back to the runtime context
         context.MinefieldScreenHeight = data.MinefieldScreenHeight;
         context.MinefieldScreenWidth = data.MinefieldScreenWidth;
         context.TotalMines = data.TotalMines;
@@ -691,14 +868,21 @@ internal static class SaveManager
         context.PlayerPositionYX = data.PlayerPositionYX;
         Timer.SavedTimeElapsed = data.SavedTimeElapsed;
 
+        // Reset the running timer after loading (keeps saved elapsed time in Timer.SavedTimeElapsed)
         Timer.InitTimer();
     }
 }
 
+/// <summary>
+/// Main program orchestrating initialization, game loop and cleanup.
+/// </summary>
 internal class Program
 {
     private static readonly GameContext context = new();
 
+    /// <summary>
+    /// Program entry point: initializes, runs the game loop and handles restart/quit flow.
+    /// </summary>
     public static void Main()
     {
         int key;
@@ -716,6 +900,11 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Initialize NCurses, colors and windows, and optionally load a saved game or show menus.
+    /// This sets up context.ScreenWidth/Height and creates the Top and Minefield windows.
+    /// </summary>
+    /// <returns>The selected mode string from the main menu or empty string if already shown.</returns>
     private static string InitializeGame()
     {
         context.Screen = NCurses.InitScreen();
@@ -730,6 +919,7 @@ internal class Program
         }
         else
         {
+            // If terminal doesn't support colors we can't proceed with the intended UI
             NCurses.EndWin();
             Console.WriteLine("ERROR: Your terminal does not support colors");
             Environment.Exit(1);
@@ -743,8 +933,10 @@ internal class Program
             context.MainMenuShown = true;
         }
 
+        // Top bar: single row for remaining mines and status
         context.TopScreen = NCurses.NewWindow(1, context.ScreenWidth, 0, 0);
 
+        // Initialize minefield model
         context.Minefield = new(context.MinefieldScreenHeight, context.MinefieldScreenWidth, context.TotalMines);
 
         if (mode.Equals("Load"))
@@ -759,6 +951,7 @@ internal class Program
             }
         }
 
+        // Create the minefield window centered in the terminal. Add 2 for border.
         context.MinefieldScreen = NCurses.NewWindow(
             context.MinefieldScreenHeight + 2,
             context.MinefieldScreenWidth + 2,
@@ -770,6 +963,11 @@ internal class Program
         return mode;
     }
 
+    /// <summary>
+    /// Map the chosen difficulty mode to minefield dimensions and mine count.
+    /// Also enforce maximums based on terminal size to avoid creating oversized windows.
+    /// </summary>
+    /// <param name="mode">Mode string returned by the main menu.</param>
     private static void SetSizeAndMineCount(string mode)
     {
         int[] easyMode = [9, 9, 10];
@@ -799,6 +997,7 @@ internal class Program
             CursesUI.ShowCustomMenu(context);
         }
 
+        // Prevent minefield from exceeding terminal size (provide margins)
         if (context.MinefieldScreenHeight > context.ScreenHeight - 8)
         {
             context.MinefieldScreenHeight = context.ScreenHeight - 8;
@@ -808,12 +1007,19 @@ internal class Program
             context.MinefieldScreenWidth = context.ScreenWidth - 3;
         }
 
+        // Ensure mines count is reasonable for the grid size
         if (context.MinefieldScreenHeight * context.MinefieldScreenWidth <= context.TotalMines)
         {
             context.TotalMines = context.MinefieldScreenHeight * context.MinefieldScreenWidth / 2;
         }
     }
 
+    /// <summary>
+    /// Main gameplay loop. Handles input, drawing, first-click mine generation, and termination conditions.
+    /// Returns the last key that caused the loop to break (used by restart logic).
+    /// </summary>
+    /// <param name="mode">Selected mode (used to detect "Load").</param>
+    /// <returns>Last key that caused game loop exit.</returns>
     private static int GameLoop(string mode)
     {
         int key = 0;
@@ -832,14 +1038,16 @@ internal class Program
 
             if (focusedMine.isOpened)
             {
+                // Use number color when focused tile is opened
                 colorPair = context.Minefield.Minefield[context.PlayerPositionYX.Row, context.PlayerPositionYX.Col].borderingMineCount;
             }
             else if (focusedMine.isFlagged)
             {
+                // Highlight flagged tile
                 colorPair = (int)ColorIds.Yellow;
             }
 
-            CursesUI.DrawBox(context, colorPair);
+            CursesUI.DrawBox(context, colorPair); // Changes the color of the box based on focused tile's color
 
             NCurses.WindowRefresh(context.MinefieldScreen);
 
@@ -847,6 +1055,7 @@ internal class Program
 
             key = NCurses.WindowGetChar(context.MinefieldScreen);
 
+            // On first move, generate mines excluding the first clicked tile to avoid instant loss
             if (!gameStarted && key == ' ' && !mode.Equals("Load"))
             {
                 exclude = context.PlayerPositionYX;
@@ -863,11 +1072,19 @@ internal class Program
         return key;
     }
 
+    /// <summary>
+    /// Determines if the provided key should cause the game to exit the main play loop.
+    /// </summary>
     private static bool ShouldExit(int key)
     {
         return key is 'q' or 'Q' or 'r' or 'R';
     }
 
+    /// <summary>
+    /// Update the player cursor position based on arrow key input while clamping to the minefield bounds.
+    /// </summary>
+    /// <param name="key">Input key code.</param>
+    /// <returns>New player position.</returns>
     private static Position UpdatePlayerPosition(int key)
     {
         int row = context.PlayerPositionYX.Row;
@@ -893,6 +1110,11 @@ internal class Program
         return new Position(row, col);
     }
 
+    /// <summary>
+    /// Wait for the user to press R or Q after a finished game. If R is pressed the application restarts.
+    /// </summary>
+    /// <param name="key">Initial key from game loop exit.</param>
+    /// <returns>True if restart requested, false to quit.</returns>
     private static bool CheckForRestart(int key)
     {
         while (key is not 'r' and not 'R' and not 'q' and not 'Q')
@@ -902,6 +1124,7 @@ internal class Program
 
         if (key is 'r' or 'R')
         {
+            // Reset runtime flags and restart by reinitializing NCurses state
             context.WrongTileChosen = false;
             context.GameWon = false;
 
