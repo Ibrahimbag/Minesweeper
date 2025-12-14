@@ -11,7 +11,7 @@ A simple TUI Minesweeper clone written in C# using the [dotnet-curses](https://g
 
 ### Prerequisites
 
-- Install the .NET SDK (9.0 or later): https://dotnet.microsoft.com/download
+- Install the .NET SDK (9.0 or later): <https://dotnet.microsoft.com/download>
 - On Linux/macOS ensure the system ncurses library is available (e.g. `libncurses` / `ncurses-devel`).
 
 ### Build and run
@@ -29,7 +29,16 @@ dotnet run
 # Linux/macOS: ./Minesweeper/bin/Release/net9.0/Minesweeper
 ```
 
-### Notes
+## Usage
 
-- The game saves progress to `save.json` in the working directory when you press `s`.
+Start your built game by using the ```dotnet build``` command or running the compiled binary.
+
+<kbd>Arrow</kbd> keys for option navigation and tile navigation.\
+<kbd>ENTER</kbd> key to choose an option.\
+<kbd>SPACE</kbd> key to open a tile.\
+<kbd>F</kbd> key to flag a tile.\
+<kbd>S</kbd> key to save your progress in a file named "save.json" in the working directory.
+
+## Notes
+
 - If you encounter terminal/color issues, ensure your terminal supports the required features or try a different terminal emulator.
