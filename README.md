@@ -31,7 +31,7 @@ dotnet run
 
 ## Usage
 
-Start your built game by using the ```dotnet build``` command or running the compiled binary.
+Start your built game by using the ```dotnet run``` command or running the compiled binary.
 
 <kbd>Arrow</kbd> keys for option navigation and tile navigation.\
 <kbd>ENTER</kbd> key to choose an option.\
